@@ -1,17 +1,3 @@
-/**
- * Issue Tracker — MCP Server
- *
- * MCP (Model Context Protocol) is an open protocol that lets AI assistants
- * call tools you define. This file stands up a small HTTP server that speaks
- * MCP, so any MCP-compatible client (Claude, an IDE plugin, another agent)
- * can list, create, and update issues on our board.
- *
- * We use the *streamable HTTP* transport rather than stdio. That means the
- * server listens on a network port, so it works both for local development
- * (http://localhost:3001/mcp) and when deployed to a public URL for a whole
- * team to share — exactly the "PM wants everyone to use my tool" scenario.
- */
-
 import express from "express";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -50,6 +36,10 @@ function textResult(value: unknown) {
 //    *how* to call the tool, so keep them precise.
 // ---------------------------------------------------------------------------
 
+// --- Worked example -------------------------------------------------------
+// `list_issues` is fully implemented so you can see the shape of a tool
+// registration. Read it, run it in the Inspector, then use it as a template
+// for the TODOs that follow.
 server.registerTool(
   "list_issues",
   {
@@ -66,85 +56,30 @@ server.registerTool(
   async ({ status }) => textResult(store.list(status as Status | undefined)),
 );
 
-server.registerTool(
-  "get_issue",
-  {
-    description: "Fetch a single issue by its id.",
-    inputSchema: {
-      id: z.string().describe("The issue id, e.g. '3'."),
-    },
-    annotations: { readOnlyHint: true },
-  },
-  async ({ id }) => {
-    const issue = store.get(id);
-    if (!issue) {
-      // Returning isError (instead of throwing) lets the AI read the message
-      // and recover — e.g. by calling list_issues to find a valid id.
-      return {
-        isError: true,
-        content: [{ type: "text", text: `Issue ${id} not found. Use list_issues to see valid ids.` }],
-      };
-    }
-    return textResult(issue);
-  },
-);
 
-server.registerTool(
-  "create_issue",
-  {
-    description: "Create a new issue. Returns the created issue including its new id.",
-    inputSchema: {
-      title: z.string().min(1).describe("Short summary of the work."),
-      description: z.string().optional().describe("Longer details. Optional."),
-      status: StatusSchema.default("backlog"),
-    },
-  },
-  async ({ title, description, status }) =>
-    textResult(store.create({ title, description, status: status as Status })),
-);
+// --- Your turn ------------------------------------------------------------
 
-server.registerTool(
-  "update_issue",
-  {
-    description:
-      "Update fields on an existing issue. Only the fields you provide are changed. " +
-      "Use this to move an issue between columns by setting `status`.",
-    inputSchema: {
-      id: z.string().describe("Id of the issue to change."),
-      title: z.string().optional(),
-      description: z.string().optional(),
-      status: StatusSchema.optional(),
-    },
-  },
-  async ({ id, title, description, status }) => {
-    const updated = store.update(id, { title, description, status: status as Status | undefined });
-    if (!updated) {
-      return {
-        isError: true,
-        content: [{ type: "text", text: `Issue ${id} not found.` }],
-      };
-    }
-    return textResult(updated);
-  },
-);
+// TODO: register a `get_issue` tool.
+//   - Input: an `id` string.
+//   - Behavior: call store.get(id). If it returns undefined, respond with
+//     `{ isError: true, content: [...] }` so the AI can recover. Otherwise
+//     return the issue via textResult().
+//   - Mark it read-only with annotations.readOnlyHint.
 
-server.registerTool(
-  "delete_issue",
-  {
-    description: "Permanently delete an issue by id.",
-    inputSchema: {
-      id: z.string().describe("Id of the issue to delete."),
-    },
-    // destructiveHint asks the host to show a confirmation before running.
-    annotations: { destructiveHint: true },
-  },
-  async ({ id }) => {
-    const ok = store.delete(id);
-    return ok
-      ? textResult({ deleted: id })
-      : { isError: true, content: [{ type: "text", text: `Issue ${id} not found.` }] };
-  },
-);
+// TODO: register a `create_issue` tool.
+//   - Inputs: `title` (required string), `description` (optional string),
+//     `status` (StatusSchema, default "backlog").
+//   - Behavior: call store.create(...) and return the new issue.
+
+// TODO: register an `update_issue` tool.
+//   - Inputs: `id` (required), plus optional `title`, `description`, `status`.
+//   - Behavior: call store.update(id, patch). Return isError if the id is
+//     unknown, otherwise return the updated issue.
+
+// TODO: register a `delete_issue` tool.
+//   - Input: `id`.
+//   - Behavior: call store.delete(id) and report success or isError.
+//   - Mark it with annotations.destructiveHint so hosts confirm before running.
 
 // ---------------------------------------------------------------------------
 // 3. Expose the server over HTTP.

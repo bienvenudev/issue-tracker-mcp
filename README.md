@@ -6,6 +6,23 @@ lets an AI assistant manage a kanban issue board.
 It uses the **streamable HTTP** transport, so the same code works for local
 development *and* for a hosted deployment that a whole team connects to.
 
+## The exercise
+
+`src/server.ts` has the server scaffolding and **one** finished tool
+(`list_issues`) so you can see what a registration looks like. Four more tools
+are left as `TODO` comments — your job is to implement them with
+`server.registerTool(...)`:
+
+- `get_issue`
+- `create_issue`
+- `update_issue`
+- `delete_issue`
+
+The data layer in `src/store.ts` is already complete; you only need to wire it
+up. After each one, restart the server and try it in the Inspector.
+
+> Stuck? The `solution` branch has a fully working version.
+
 ## Run it
 
 ```bash
