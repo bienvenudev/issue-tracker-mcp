@@ -65,28 +65,115 @@ server.registerTool(
 //     `{ isError: true, content: [...] }` so the AI can recover. Otherwise
 //     return the issue via textResult().
 //   - Mark it read-only with annotations.readOnlyHint.
+server.registerTool(
+  "get_issue",
+  {
+    description:
+      "Get a single issue by ID. Returns id, title, status, and description.",
+    inputSchema: z.object({ id: z.string() }),
+    annotations: { readOnlyHint: true },
+  },
+  async ({ id }) => {
+    const issue = store.get(id);
+    if (!issue) {
+      return {
+        isError: true,
+        content: [{ type: "text" as const, text: `No issue with id ${id}` }],
+      };
+    }
+    return textResult(issue);
+  },
+);
 
 // TODO: register a `create_issue` tool.
 //   - Inputs: `title` (required string), `description` (optional string),
 //     `status` (StatusSchema, default "backlog").
 //   - Behavior: call store.create(...) and return the new issue.
+server.registerTool(
+  "create_issue",
+  {
+    description:
+      "Create a new issue with a title, optional description, and status.",
+    inputSchema: z.object({
+      title: z.string(),
+      description: z.string().optional(),
+      status: StatusSchema.default("backlog"),
+    }),
+  },
+  async ({ title, description, status }) => {
+    const issue = store.create({ title, description, status });
+    return textResult(issue);
+  },
+);
 
 // TODO: register an `update_issue` tool.
 //   - Inputs: `id` (required), plus optional `title`, `description`, `status`.
 //   - Behavior: call store.update(id, patch). Return isError if the id is
 //     unknown, otherwise return the updated issue.
+server.registerTool(
+  "update_issue",
+  {
+    description:
+      "Update an existing issue's title, description, or status. Specify the issue by ID.",
+    inputSchema: z.object({
+      id: z.string(),
+      title: z.string().optional(),
+      description: z.string().optional(),
+      status: StatusSchema.optional(),
+    }),
+  },
+  async ({ id, title, description, status }) => {
+    const patch = { title, description, status };
+    const issue = store.update(id, patch);
+    if (!issue) {
+      return {
+        isError: true,
+        content: [{ type: "text" as const, text: `No issue with id ${id}` }],
+      };
+    }
+    return textResult(issue);
+  },
+);
 
 // TODO: register a `delete_issue` tool.
 //   - Input: `id`.
 //   - Behavior: call store.delete(id) and report success or isError.
 //   - Mark it with annotations.destructiveHint so hosts confirm before running.
-
+server.registerTool(
+  "delete_issue",
+  {
+    description: "Delete an issue by ID. This action cannot be undone.",
+    inputSchema: z.object({ id: z.string() }),
+    annotations: { destructiveHint: true },
+  },
+  async ({ id }) => {
+    const success = store.delete(id);
+    if (!success) {
+      return {
+        isError: true,
+        content: [{ type: "text" as const, text: `No issue with id ${id}` }],
+      };
+    }
+    return textResult({ success: true });
+  },
+);
 // ---------------------------------------------------------------------------
 // 3. Expose the server over HTTP.
 //    MCP's "streamable HTTP" transport is just JSON over a single POST
 //    endpoint. We run it *stateless*: every request gets a fresh transport,
 //    which keeps the code simple and scales horizontally behind a load
 //    balancer when you deploy it.
+
+/*
+Recommended order:
+
+Start the server — npm start (leave this running)
+Try the Inspector first — npm run inspect in another terminal. It opens a browser UI where you can call each tool with custom arguments visually. Great for exploring.
+Then wire up Claude Code — run the claude mcp add command above, then open claude in this directory and just talk to it: "Create an issue titled 'Fix login bug' with status todo"
+
+Use claude mcp add -transport http -scope project issue-tracker http://localhost:3001/mcp
+*/
+
 // ---------------------------------------------------------------------------
 const app = express();
 app.use(express.json());
